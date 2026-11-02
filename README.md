@@ -2,6 +2,8 @@
 
 Official English website for **SevenTiming**, an independent software studio.
 
+Live site: <https://seventiming.com>
+
 The site is a single marketing page plus a privacy page. It is deliberately plain: no tracking, no cookie banner, no invented clients or statistics.
 
 ## Stack
