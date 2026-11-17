@@ -14,7 +14,7 @@
     "verify": "pnpm run build && pnpm run typecheck && pnpm run lint && node scripts/verify-site.mjs"
   },
   "dependencies": {
-    "next": "16.4.3",
+    "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
