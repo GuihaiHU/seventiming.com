@@ -11,7 +11,7 @@ The site is a single marketing page plus a privacy page. It is deliberately plai
 - [Next.js 16](https://nextjs.org/) with static export (`output: "export"`)
 - [Tailwind CSS v4](https://tailwindcss.com/)
 - [Geist](https://vercel.com/font) via `next/font/google`
-- GitHub Pages for hosting, deployed by GitHub Actions
+- nginx on `sf03` (`47.115.138.206`), deployed with `scripts/deploy-sf03.sh`
 
 ## Local development
 
@@ -44,8 +44,8 @@ app/
 components/           header, footer, wordmark
 lib/site.ts           canonical name, URL, email, and description
 public/               exported images and Open Graph card
-scripts/              site verification and Open Graph generation
-.github/workflows/    GitHub Pages deployment
+scripts/              site verification, Open Graph generation, sf03 deployment
+deploy/nginx/         the sf03 vhost
 ```
 
 ## Content rules
@@ -61,32 +61,46 @@ If you add a claim, make sure it is true and can be explained in one sentence. P
 
 ## Deployment
 
-Pushing to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), builds the static export, and publishes `out/` to GitHub Pages.
+Production is an nginx vhost on `sf03` serving the static export from `/var/www/seventiming.com`:
 
-One-time repository setup:
+```bash
+bash scripts/deploy-sf03.sh               # verify, build, upload
+bash scripts/deploy-sf03.sh --skip-build  # upload the existing out/
+```
 
-1. In **Settings → Pages**, set **Build and deployment → Source** to **GitHub Actions**.
-2. Set the custom domain to `seventiming.com`.
-3. Add the DNS records below at the domain registrar (Aliyun / HiChina for this domain).
-4. After the certificate is issued, enable **Enforce HTTPS**.
+The script runs `pnpm verify`, mirrors `out/` to the server with `rsync --delete`, normalises file permissions, and checks that the vhost answers on `127.0.0.1`. `DEPLOY_HOST` and `DEPLOY_DIR` override the defaults.
 
-### DNS records
+The vhost lives in [`deploy/nginx/seventiming.com.conf`](deploy/nginx/seventiming.com.conf) and only needs reinstalling when it changes:
+
+```bash
+scp deploy/nginx/seventiming.com.conf sf03:/etc/nginx/sites-available/seventiming.com
+ssh sf03 'nginx -t && systemctl reload nginx'
+```
+
+### DNS
+
+Point both names at the server; the MX records for `hello@seventiming.com` are unrelated and must stay as they are.
 
 | Type | Host | Value | TTL |
 | --- | --- | --- | --- |
-| A | `@` | `185.199.108.153` | 600 |
-| A | `@` | `185.199.109.153` | 600 |
-| A | `@` | `185.199.110.153` | 600 |
-| A | `@` | `185.199.111.153` | 600 |
-| CNAME | `www` | `guihaihu.github.io` | 600 |
+| A | `@` | `47.115.138.206` | 600 |
+| A | `www` | `47.115.138.206` | 600 |
 
-Do not remove the existing MX records. `hello@seventiming.com` is hosted by Aliyun enterprise mail, and the MX records are already configured for that service.
+`www` answers with a 301 to the apex domain.
 
-The `github.io` project URL (`https://guihaihu.github.io/seventiming.com/`) serves the same build before the custom domain is attached. Because the project is exported for a root domain, its `_next` asset paths are absolute; use the custom domain for the complete site.
+### HTTPS
+
+Both names share one Let's Encrypt certificate (issued over HTTP-01, expires 2027-02-17). Certbot wrote the TLS blocks into the vhost; re-issuing is only needed if the domain set changes:
+
+```bash
+ssh sf03 'certbot --nginx -d seventiming.com -d www.seventiming.com --redirect'
+```
+
+Renewal runs from the certbot timer on the server. TLS is served over HTTP/2, plain HTTP redirects to `https://seventiming.com` in a single hop, and `https://www.seventiming.com` 301s to the apex.
 
 ### Changing the domain
 
-Update `lib/site.ts` and the DNS records. The canonical URL, sitemap, robots, Open Graph metadata, and JSON-LD are all derived from `site.url`.
+Update `lib/site.ts`, the vhost `server_name` lines, and the DNS records. The canonical URL, sitemap, robots, Open Graph metadata, and JSON-LD are all derived from `site.url`.
 
 ## Images
 
